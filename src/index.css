@@ -8,8 +8,8 @@
   font-weight: 400;
 
   color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #0f172a;
+  color: #3d3d3d;
+  background-color: #fcfaf7;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -29,10 +29,10 @@ body {
 }
 
 .glass-morphism {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.7);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 .no-scrollbar::-webkit-scrollbar {
@@ -41,4 +41,9 @@ body {
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
+}
+
+.selection-orange::selection {
+  background-color: #ffedd5;
+  color: #9a3412;
 }
