@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "base": "/riassunto5/",
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
@@ -10,7 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@expo/metro-runtime": "~55.0.6",
+    "@expo/metro-runtime": "~5.0.6",
     "clsx": "^2.1.1",
     "expo": "^55.0.8",
     "framer-motion": "^12.38.0",
