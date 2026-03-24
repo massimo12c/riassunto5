@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Search, 
-  Trash2, 
-  Youtube, 
-  Globe, 
-  MessageSquare, 
+import React, { useEffect, useState } from 'react';
+import {
+  Trash2,
+  Youtube,
+  Globe,
+  MessageSquare,
   History,
   Sparkles,
   Loader2,
@@ -14,18 +13,11 @@ import {
   Bookmark,
   Sun,
   Moon,
-  Calendar
+  Calendar,
 } from 'lucide-react';
-import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { motion, AnimatePresence } from 'framer-motion';
 
-// Utility for Tailwind classes
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
-
-interface Summary {
+interface SummaryItem {
   id: string;
   topic: string;
   content: string;
@@ -33,258 +25,639 @@ interface Summary {
 }
 
 const MOCK_SUMMARIES: Record<string, string> = {
-  "napoleone": "Napoleone Bonaparte (1769-1821) è stato un generale e imperatore francese che ha cambiato il corso della storia europea. Nato in Corsica, scalò rapidamente i ranghi militari durante la Rivoluzione Francese. Divenne Primo Console nel 1799 e Imperatore dei Francesi nel 1804. Le sue campagne militari, note come guerre napoleoniche, estesero l'influenza francese su gran parte dell'Europa continentale. Oltre alle sue conquiste, Napoleone introdusse riforme legislative durature, come il Codice Napoleone, che ha influenzato i sistemi giuridici di molti paesi moderni. La sua egemonia terminò con la disastrosa campagna di Russia nel 1812 e la sconfitta definitiva a Waterloo nel 1815. Morì in esilio sull'isola di Sant'Elena, lasciando un'eredità complessa che spazia dal genio militare alla trasformazione delle istituzioni europee.",
-  "giulio cesare": "Gaio Giulio Cesare (100 a.C. - 44 a.C.) è stato uno dei più grandi leader politici e militari della storia romana. Attraverso le sue campagne nelle Gallie, estese i confini della Repubblica Romana fino all'Atlantico e al Reno. Dopo la guerra civile contro Pompeo, divenne il dittatore indiscusso di Roma, avviando una serie di riforme sociali e politiche radicali, tra cui la creazione del calendario giuliano. Il suo assassinio alle Idi di Marzo nel 44 a.C. per mano di un gruppo di senatori guidati da Bruto e Cassio portò a un'ulteriore instabilità che culminò nella fine della Repubblica e nella nascita dell'Impero Romano sotto il suo erede Augusto.",
+  napoleone:
+    'Napoleone Bonaparte (1769-1821) è stato un generale e imperatore francese. Divenne famoso dopo la Rivoluzione francese, conquistò gran parte dell’Europa e introdusse importanti riforme amministrative e giuridiche, come il Codice Napoleonico.',
+  'giulio cesare':
+    'Gaio Giulio Cesare (100 a.C. - 44 a.C.) fu uno dei più grandi leader politici e militari di Roma. Conquistò la Gallia, consolidò il suo potere e contribuì alla fine della Repubblica romana.',
+  diritto:
+    'Il diritto è l’insieme delle regole che disciplinano la convivenza civile. Si divide in vari rami, come diritto privato, pubblico, penale e amministrativo.',
+  cheratocono:
+    'Il cheratocono è una patologia della cornea che provoca assottigliamento e deformazione conica, causando visione distorta e astigmatismo irregolare.',
 };
 
-const App: React.FC = () => {
+const STORAGE_KEY = 'riassumi-smart-history';
+
+function getTodayLabel() {
+  return new Date().toLocaleDateString('it-IT', {
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
+function getGreeting() {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'BUONGIORNO';
+  if (hour < 18) return 'BUON POMERIGGIO';
+  return 'BUONASERA';
+}
+
+function findMockSummary(text: string) {
+  const lower = text.toLowerCase();
+  const key = Object.keys(MOCK_SUMMARIES).find((k) => lower.includes(k));
+  if (!key) return null;
+  return {
+    topic: key,
+    content: MOCK_SUMMARIES[key],
+  };
+}
+
+export default function App() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [currentSummary, setCurrentSummary] = useState<Summary | null>(null);
-  const [history, setHistory] = useState<Summary[]>([]);
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const [currentSummary, setCurrentSummary] = useState<SummaryItem | null>(null);
+  const [history, setHistory] = useState<SummaryItem[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [savedCount, setSavedCount] = useState(0);
+  const [darkMode, setDarkMode] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem('riassunti_history');
-    if (saved) setHistory(JSON.parse(saved));
-    
-    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
-    return () => clearInterval(timer);
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        const parsed: SummaryItem[] = JSON.parse(saved);
+        setHistory(parsed);
+      } catch {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    }
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('riassunti_history', JSON.stringify(history));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(history));
   }, [history]);
 
-  const handleSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim()) return;
+  const handleSummarize = async () => {
+    const trimmed = input.trim();
+    if (!trimmed) return;
 
     setIsLoading(true);
-    setTimeout(() => {
-      const topic = input.toLowerCase().trim();
-      const content = MOCK_SUMMARIES[topic] || 
-        `Ecco un riassunto dettagliato su ${input}: Questo argomento riguarda un tema di grande interesse storico e culturale. Lo studio di ${input} rivela molteplici sfaccettature che hanno influenzato lo sviluppo della società contemporanea. Analizzando i dati disponibili, possiamo osservare come l'evoluzione di questo concetto abbia portato a trasformazioni significative in vari settori. È importante notare che ${input} continua ad essere oggetto di dibattito accademico e interesse pubblico, sottolineando la sua rilevanza persistente nel tempo.`;
-      
-      const newSummary: Summary = {
-        id: Date.now().toString(),
-        topic: input,
-        content: content,
-        date: new Date().toLocaleDateString('it-IT')
-      };
+    setCurrentSummary(null);
 
-      setCurrentSummary(newSummary);
-      setHistory(prev => [newSummary, ...prev]);
-      setIsLoading(false);
-      setInput('');
-    }, 1200);
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    const mock = findMockSummary(trimmed);
+    const content =
+      mock?.content ??
+      `Riassunto di "${trimmed}": questo argomento riguarda i concetti principali, i punti più importanti e una spiegazione semplice per aiutarti a studiare più velocemente. Puoi approfondire cercandolo su Google, YouTube o ChatGPT con i pulsanti rapidi qui sotto.`;
+
+    const newItem: SummaryItem = {
+      id: Date.now().toString(),
+      topic: trimmed,
+      content,
+      date: new Date().toLocaleString('it-IT'),
+    };
+
+    setCurrentSummary(newItem);
+    setHistory((prev) => [newItem, ...prev]);
+    setInput('');
+    setIsLoading(false);
   };
 
-  const deleteFromHistory = (id: string) => {
-    setHistory(prev => prev.filter(item => item.id !== id));
+  const handleDelete = (id: string) => {
+    setHistory((prev) => prev.filter((item) => item.id !== id));
+    if (currentSummary?.id === id) {
+      setCurrentSummary(null);
+    }
   };
 
-  const getGreeting = () => {
-    const hour = currentTime.getHours();
-    if (hour < 12) return "BUONGIORNO";
-    if (hour < 18) return "BUON POMERIGGIO";
-    return "BUONASERA";
+  const handleSaveCurrent = () => {
+    if (!currentSummary) return;
+    setSavedCount((prev) => prev + 1);
   };
+
+  const openGoogle = () => {
+    const query = encodeURIComponent(currentSummary?.topic || input || 'argomento studio');
+    window.open(`https://www.google.com/search?q=${query}`, '_blank');
+  };
+
+  const openYouTube = () => {
+    const query = encodeURIComponent(currentSummary?.topic || input || 'argomento studio');
+    window.open(`https://www.youtube.com/results?search_query=${query}`, '_blank');
+  };
+
+  const openChatGPT = () => {
+    window.open('https://chat.openai.com/', '_blank');
+  };
+
+  const bg = darkMode ? '#0f172a' : '#f4f2ee';
+  const card = darkMode ? '#111827' : '#ffffff';
+  const text = darkMode ? '#f8fafc' : '#111827';
+  const sub = darkMode ? '#cbd5e1' : '#94a3b8';
+  const border = darkMode ? '#1f2937' : '#e5e7eb';
 
   return (
-    <div className="min-h-screen bg-[#fcfaf7] text-[#3d3d3d] selection-orange font-sans pb-20 flex flex-col">
-      <main className="max-w-xl mx-auto px-6 pt-16 md:pt-24 flex-grow w-full space-y-12">
-        
-        {/* Header Section */}
-        <header className="space-y-4 text-center md:text-left">
-          <motion.div 
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="flex items-center justify-center md:justify-start gap-3 text-orange-500/80"
-          >
-            {currentTime.getHours() < 18 ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            <span className="text-xs font-black uppercase tracking-[0.3em]">{getGreeting()}</span>
-          </motion.div>
-          
-          <div className="space-y-1">
-            <h1 className="text-5xl font-black tracking-tighter text-[#1a1a1a] leading-tight">
+    <div
+      style={{
+        minHeight: '100vh',
+        background: bg,
+        color: text,
+        fontFamily:
+          'Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+        padding: '24px 16px 48px',
+      }}
+    >
+      <div style={{ maxWidth: 860, margin: '0 auto' }}>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: 28,
+          }}
+        >
+          <div>
+            <div
+              style={{
+                color: '#fb923c',
+                fontWeight: 700,
+                letterSpacing: '0.22em',
+                fontSize: 14,
+                marginBottom: 10,
+              }}
+            >
+              {getGreeting()}
+            </div>
+            <h1
+              style={{
+                margin: 0,
+                fontSize: 58,
+                lineHeight: 1,
+                fontWeight: 800,
+                letterSpacing: '-0.04em',
+              }}
+            >
               Il tuo Flow.
             </h1>
-            <p className="text-lg text-slate-400 font-medium italic">"Un passo alla volta."</p>
+            <p
+              style={{
+                marginTop: 14,
+                marginBottom: 0,
+                fontSize: 18,
+                color: sub,
+                fontStyle: 'italic',
+              }}
+            >
+              “Oggi è un nuovo inizio.”
+            </p>
           </div>
-        </header>
 
-        {/* Central Search Section */}
-        <section className="flex flex-col items-center justify-center space-y-10">
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="w-full bg-white rounded-[3rem] p-8 shadow-[0_20px_60px_rgba(0,0,0,0.04)] border border-slate-50 space-y-6"
+          <button
+            onClick={() => setDarkMode((v) => !v)}
+            style={{
+              border: `1px solid ${border}`,
+              background: card,
+              color: text,
+              width: 52,
+              height: 52,
+              borderRadius: 18,
+              cursor: 'pointer',
+              boxShadow: '0 8px 20px rgba(0,0,0,0.06)',
+            }}
           >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3 text-[#1a1a1a]">
-                <Sparkles className="w-5 h-5 text-orange-500" />
-                <h3 className="font-black text-lg">Riassumi</h3>
-              </div>
+            {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+          </button>
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          style={{
+            background: card,
+            borderRadius: 34,
+            padding: 26,
+            boxShadow: darkMode
+              ? '0 10px 30px rgba(0,0,0,0.25)'
+              : '0 8px 24px rgba(15,23,42,0.08)',
+            border: `1px solid ${border}`,
+            marginBottom: 22,
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: 16,
+              marginBottom: 18,
+              flexWrap: 'wrap',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <Sparkles size={26} color="#6366f1" />
+              <div style={{ fontSize: 22, fontWeight: 800 }}>Focus di oggi</div>
             </div>
 
-            <form onSubmit={handleSearch} className="relative group">
-              <div className="relative overflow-hidden rounded-[1.5rem] bg-[#f8f9fa] border border-transparent focus-within:border-slate-100 focus-within:bg-white transition-all p-1">
-                <input
-                  type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder="Cosa vuoi riassumere?"
-                  className="w-full bg-transparent py-4 px-5 text-base focus:outline-none placeholder:text-slate-300 font-medium"
-                />
-                <button
-                  type="submit"
-                  disabled={isLoading}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 bg-orange-500 hover:bg-orange-600 text-white w-10 h-10 rounded-2xl flex items-center justify-center transition-all shadow-lg shadow-orange-500/20 disabled:opacity-50 active:scale-95"
-                >
-                  {isLoading ? <Loader2 className="animate-spin w-5 h-5" /> : <Plus className="w-5 h-5" />}
-                </button>
-              </div>
-            </form>
+            <div
+              style={{
+                color: '#cbd5e1',
+                fontWeight: 800,
+                letterSpacing: '0.12em',
+                fontSize: 14,
+              }}
+            >
+              {history.length}/{savedCount} COMPLETATI
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSummarize();
+              }}
+              placeholder="Cosa vuoi realizzare?"
+              style={{
+                flex: 1,
+                border: 'none',
+                outline: 'none',
+                borderRadius: 18,
+                padding: '18px 20px',
+                background: darkMode ? '#1f2937' : '#f8fafc',
+                color: text,
+                fontSize: 18,
+              }}
+            />
+            <button
+              onClick={handleSummarize}
+              style={{
+                width: 62,
+                height: 62,
+                border: 'none',
+                borderRadius: 18,
+                background: '#f97316',
+                color: '#fff',
+                cursor: 'pointer',
+                boxShadow: '0 10px 24px rgba(249,115,22,0.28)',
+              }}
+            >
+              {isLoading ? <Loader2 className="spin" size={22} /> : <Plus size={26} />}
+            </button>
+          </div>
+        </motion.div>
+
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+            gap: 20,
+            marginBottom: 24,
+          }}
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+            style={{
+              background: darkMode ? '#111827' : '#eef4ff',
+              borderRadius: 34,
+              padding: 28,
+              minHeight: 240,
+              border: `1px solid ${border}`,
+            }}
+          >
+            <div style={{ color: '#3b82f6', marginBottom: 18 }}>
+              <Bookmark size={40} />
+            </div>
+            <div
+              style={{
+                color: '#60a5fa',
+                fontWeight: 800,
+                letterSpacing: '0.12em',
+                marginBottom: 14,
+              }}
+            >
+              SALVATI
+            </div>
+            <div style={{ fontSize: 54, fontWeight: 800, color: '#2563eb', lineHeight: 1 }}>
+              {savedCount}
+            </div>
+            <div style={{ marginTop: 24, display: 'flex', gap: 12 }}>
+              <button
+                onClick={() => setSavedCount((v) => Math.max(0, v - 1))}
+                style={smallBtn('#fff', '#3b82f6')}
+              >
+                <X size={20} />
+              </button>
+              <button onClick={() => setSavedCount((v) => v + 1)} style={smallBtn('#3b82f6', '#fff')}>
+                <Plus size={20} />
+              </button>
+            </div>
           </motion.div>
 
-          {/* Side-by-side App Icons (Mobile Style) */}
-          <div className="flex justify-between items-center w-full px-4">
-            <a 
-              href="https://www.google.com" 
-              target="_blank" 
-              className="flex flex-col items-center gap-2 group"
+          <motion.div
+            initial={{ opacity: 0, y: 14 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            style={{
+              background: darkMode ? '#111827' : '#eefbf3',
+              borderRadius: 34,
+              padding: 28,
+              minHeight: 240,
+              border: `1px solid ${border}`,
+            }}
+          >
+            <div style={{ color: '#10b981', marginBottom: 18 }}>
+              <ArrowRight size={40} />
+            </div>
+            <div
+              style={{
+                color: '#10b981',
+                fontWeight: 800,
+                letterSpacing: '0.12em',
+                marginBottom: 14,
+              }}
             >
-              <div className="w-16 h-16 bg-white rounded-[1.5rem] flex items-center justify-center shadow-[0_10px_30px_rgba(0,0,0,0.03)] border border-slate-50 group-hover:scale-105 group-active:scale-95 transition-all">
-                <Globe className="w-7 h-7 text-blue-500" />
-              </div>
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-blue-500">Google</span>
-            </a>
-            <a 
-              href="https://chatgpt.com" 
-              target="_blank" 
-              className="flex flex-col items-center gap-2 group"
+              AVVIO
+            </div>
+            <div
+              style={{
+                fontSize: 28,
+                fontWeight: 800,
+                color: '#059669',
+                lineHeight: 1.15,
+                maxWidth: 220,
+              }}
             >
-              <div className="w-16 h-16 bg-white rounded-[1.5rem] flex items-center justify-center shadow-[0_10px_30px_rgba(0,0,0,0.03)] border border-slate-50 group-hover:scale-105 group-active:scale-95 transition-all">
-                <MessageSquare className="w-7 h-7 text-emerald-500" />
-              </div>
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-emerald-500">ChatGPT</span>
-            </a>
-            <a 
-              href="https://www.youtube.com" 
-              target="_blank" 
-              className="flex flex-col items-center gap-2 group"
+              Parti da un minuto
+            </div>
+            <button
+              onClick={handleSummarize}
+              style={{
+                marginTop: 26,
+                border: 'none',
+                background: '#fff',
+                color: '#111827',
+                padding: '14px 26px',
+                borderRadius: 999,
+                cursor: 'pointer',
+                fontWeight: 800,
+                letterSpacing: '0.1em',
+                boxShadow: '0 8px 20px rgba(0,0,0,0.08)',
+              }}
             >
-              <div className="w-16 h-16 bg-white rounded-[1.5rem] flex items-center justify-center shadow-[0_10px_30px_rgba(0,0,0,0.03)] border border-slate-50 group-hover:scale-105 group-active:scale-95 transition-all">
-                <Youtube className="w-7 h-7 text-red-500" />
-              </div>
-              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 group-hover:text-red-500">YouTube</span>
-            </a>
-          </div>
-        </section>
+              INIZIA
+            </button>
+          </motion.div>
+        </div>
 
-        {/* Current Result Card */}
-        <AnimatePresence mode="wait">
+        <AnimatePresence>
           {currentSummary && (
             <motion.div
-              key="result"
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white rounded-[3rem] p-8 shadow-[0_20px_60px_rgba(0,0,0,0.04)] border border-slate-50 space-y-6 relative"
+              initial={{ opacity: 0, y: 18 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 18 }}
+              style={{
+                background: card,
+                borderRadius: 30,
+                padding: 24,
+                boxShadow: darkMode
+                  ? '0 10px 30px rgba(0,0,0,0.25)'
+                  : '0 8px 24px rgba(15,23,42,0.08)',
+                border: `1px solid ${border}`,
+                marginBottom: 22,
+              }}
             >
-              <button 
-                onClick={() => setCurrentSummary(null)}
-                className="absolute top-6 right-6 text-slate-200 hover:text-slate-400 transition-colors"
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  gap: 16,
+                  flexWrap: 'wrap',
+                  marginBottom: 16,
+                }}
               >
-                <X className="w-5 h-5" />
-              </button>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-orange-500">
-                  <Bookmark className="w-4 h-4 fill-current" />
-                  <span className="text-[10px] font-black uppercase tracking-widest">RISULTATO</span>
+                <div>
+                  <div style={{ fontSize: 12, color: sub, letterSpacing: '0.12em', fontWeight: 800 }}>
+                    RIASSUNTO
+                  </div>
+                  <h2 style={{ margin: '8px 0 4px', fontSize: 28 }}>{currentSummary.topic}</h2>
+                  <div style={{ color: sub, fontSize: 14 }}>{currentSummary.date}</div>
                 </div>
-                <h2 className="text-3xl font-black tracking-tighter text-[#1a1a1a] capitalize">
-                  {currentSummary.topic}
-                </h2>
+
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button onClick={handleSaveCurrent} style={iconBtn(card, text, border)}>
+                    <Bookmark size={18} />
+                  </button>
+                  <button onClick={() => setCurrentSummary(null)} style={iconBtn(card, text, border)}>
+                    <X size={18} />
+                  </button>
+                </div>
               </div>
-              <p className="text-slate-600 leading-relaxed font-medium opacity-90">
+
+              <p
+                style={{
+                  fontSize: 17,
+                  lineHeight: 1.7,
+                  color: text,
+                  marginTop: 0,
+                  whiteSpace: 'pre-wrap',
+                }}
+              >
                 {currentSummary.content}
               </p>
+
+              <div
+                style={{
+                  display: 'flex',
+                  gap: 12,
+                  flexWrap: 'wrap',
+                  marginTop: 18,
+                }}
+              >
+                <button onClick={openGoogle} style={actionBtn('#eff6ff', '#2563eb')}>
+                  <Globe size={18} />
+                  Google
+                </button>
+                <button onClick={openYouTube} style={actionBtn('#fff7ed', '#ea580c')}>
+                  <Youtube size={18} />
+                  YouTube
+                </button>
+                <button onClick={openChatGPT} style={actionBtn('#f0fdf4', '#16a34a')}>
+                  <MessageSquare size={18} />
+                  ChatGPT
+                </button>
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* History List */}
-        <section className="space-y-6 pt-4">
-          <div className="flex items-center gap-2 text-slate-300">
-            <History className="w-4 h-4" />
-            <h3 className="text-[10px] font-black uppercase tracking-[0.2em]">CRONOLOGIA RECENTE</h3>
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.12 }}
+          style={{
+            background: card,
+            borderRadius: 30,
+            padding: 24,
+            boxShadow: darkMode
+              ? '0 10px 30px rgba(0,0,0,0.25)'
+              : '0 8px 24px rgba(15,23,42,0.08)',
+            border: `1px solid ${border}`,
+            marginBottom: 32,
+          }}
+        >
+          <button
+            onClick={() => setShowHistory((v) => !v)}
+            style={{
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: 'transparent',
+              border: 'none',
+              color: text,
+              cursor: 'pointer',
+              padding: 0,
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <History size={22} color="#8b5cf6" />
+              <span style={{ fontSize: 22, fontWeight: 800 }}>Cronologia</span>
+            </div>
+            <span style={{ color: sub, fontWeight: 700 }}>{showHistory ? 'NASCONDI' : 'MOSTRA'}</span>
+          </button>
+
+          <AnimatePresence>
+            {showHistory && (
+              <motion.div
+                initial={{ opacity: 0, height: 0, marginTop: 0 }}
+                animate={{ opacity: 1, height: 'auto', marginTop: 18 }}
+                exit={{ opacity: 0, height: 0, marginTop: 0 }}
+                style={{ overflow: 'hidden' }}
+              >
+                {history.length === 0 ? (
+                  <div
+                    style={{
+                      padding: 18,
+                      borderRadius: 20,
+                      background: darkMode ? '#0f172a' : '#f8fafc',
+                      color: sub,
+                    }}
+                  >
+                    Nessun riassunto salvato per ora.
+                  </div>
+                ) : (
+                  <div style={{ display: 'grid', gap: 12 }}>
+                    {history.map((item) => (
+                      <div
+                        key={item.id}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          gap: 14,
+                          alignItems: 'flex-start',
+                          padding: 18,
+                          borderRadius: 20,
+                          background: darkMode ? '#0f172a' : '#f8fafc',
+                          border: `1px solid ${border}`,
+                        }}
+                      >
+                        <div
+                          style={{ cursor: 'pointer', flex: 1 }}
+                          onClick={() => setCurrentSummary(item)}
+                        >
+                          <div style={{ fontWeight: 800, marginBottom: 6 }}>{item.topic}</div>
+                          <div
+                            style={{
+                              color: sub,
+                              fontSize: 14,
+                              marginBottom: 8,
+                            }}
+                          >
+                            {item.date}
+                          </div>
+                          <div style={{ color: text, lineHeight: 1.5 }}>
+                            {item.content.slice(0, 120)}...
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => handleDelete(item.id)}
+                          style={{
+                            border: 'none',
+                            background: 'transparent',
+                            cursor: 'pointer',
+                            color: '#ef4444',
+                          }}
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+
+        <div
+          style={{
+            textAlign: 'center',
+            color: '#c4c4c4',
+            paddingTop: 8,
+          }}
+        >
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 10,
+              fontWeight: 800,
+              letterSpacing: '0.12em',
+              marginBottom: 12,
+            }}
+          >
+            <Calendar size={18} />
+            {getTodayLabel().toUpperCase()}
           </div>
-          
-          <div className="space-y-3">
-            <AnimatePresence initial={false}>
-              {history.map((item) => (
-                <SwipeableItem 
-                  key={item.id} 
-                  item={item} 
-                  onDelete={() => deleteFromHistory(item.id)}
-                  onClick={() => setCurrentSummary(item)}
-                />
-              ))}
-            </AnimatePresence>
+          <div style={{ fontSize: 14, fontWeight: 700 }}>
+            CUSTODISCI IL TUO TEMPO, OGNI GIORNO.
           </div>
-        </section>
-
-        {/* Footer Date */}
-        <footer className="pt-12 pb-8 flex justify-center items-center gap-2 text-slate-200">
-          <Calendar className="w-4 h-4" />
-          <span className="text-[10px] font-black uppercase tracking-[0.2em]">
-            {currentTime.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' }).toUpperCase()}
-          </span>
-        </footer>
-      </main>
-    </div>
-  );
-};
-
-const SwipeableItem: React.FC<{ 
-  item: Summary; 
-  onDelete: () => void; 
-  onClick: () => void;
-}> = ({ item, onDelete, onClick }) => {
-  const x = useMotionValue(0);
-  const opacity = useTransform(x, [-100, 0], [1, 0]);
-  
-  return (
-    <div className="relative overflow-hidden rounded-[2rem]">
-      <motion.div 
-        style={{ opacity }}
-        className="absolute right-6 top-1/2 -translate-y-1/2 text-red-400"
-      >
-        <Trash2 className="w-5 h-5" />
-      </motion.div>
-
-      <motion.div
-        style={{ x }}
-        drag="x"
-        dragConstraints={{ left: -100, right: 0 }}
-        onDragEnd={(_, info) => {
-          if (info.offset.x < -60) onDelete();
-        }}
-        className="relative z-10 bg-white border border-slate-50 p-6 cursor-pointer hover:border-orange-100 transition-colors flex justify-between items-center group shadow-sm active:scale-[0.98]"
-        onClick={onClick}
-      >
-        <div className="space-y-1">
-          <h4 className="font-black tracking-tight text-[#1a1a1a] capitalize text-lg group-hover:text-orange-500 transition-colors">
-            {item.topic}
-          </h4>
-          <p className="text-slate-200 text-[9px] font-black uppercase tracking-widest">{item.date}</p>
         </div>
-        <ArrowRight className="w-4 h-4 text-slate-100 group-hover:text-orange-200 transition-colors" />
-      </motion.div>
+      </div>
     </div>
   );
-};
+}
 
-export default App;
+function smallBtn(background: string, color: string): React.CSSProperties {
+  return {
+    width: 58,
+    height: 58,
+    borderRadius: 999,
+    border: 'none',
+    background,
+    color,
+    cursor: 'pointer',
+    boxShadow: '0 8px 20px rgba(0,0,0,0.08)',
+  };
+}
+
+function iconBtn(background: string, color: string, border: string): React.CSSProperties {
+  return {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    border: `1px solid ${border}`,
+    background,
+    color,
+    cursor: 'pointer',
+  };
+}
+
+function actionBtn(background: string, color: string): React.CSSProperties {
+  return {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 8,
+    border: 'none',
+    background,
+    color,
+    padding: '12px 16px',
+    borderRadius: 14,
+    cursor: 'pointer',
+    fontWeight: 700,
+  };
+}
